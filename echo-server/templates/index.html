@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Echo Service</h1>
+            <div class="user-info">
+                Welcome, {{.User.Username}}! 
+                <a href="/logout">Logout</a>
+            </div>
+        </header>
+        
+        {{if .Error}}
+            <div class="alert error">{{.Error}}</div>
+        {{end}}
+        
+        <div class="chat-container">
+            <div class="message-form">
+                <input type="text" id="message-input" placeholder="Type your message...">
+                <button onclick="sendMessage()">Send</button>
+            </div>
+            
+            <div class="history-container">
+                <h2>Message History</h2>
+                <div id="messages">
+                    {{range .Messages}}
+                    <div class="message">
+                        <div class="original">{{.OriginalMessage}}</div>
+                        <div class="reversed">{{.ReversedMessage}}</div>
+                        <div class="timestamp">{{.CreatedAt.Format "2006-01-02 15:04"}}</div>
+                    </div>
+                    {{end}}
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message === '') return;
+            
+            // 创建 URLSearchParams 对象来发送表单编码的数据
+            const params = new URLSearchParams();
+            params.append('message', message);
+            
+            axios.post('/echo', params) // 使用 params 替代原始对象
+            .then(response => {
+                const data = response.data;
+                // 注意：后端返回的 timestamp 格式是 "2006-01-02 15:04:05"
+                // 为了和页面加载时的格式 "2006-01-02 15:04" 统一，可以截取一下
+                addMessageToHistory(data.original, data.reversed, data.timestamp.substring(0, 16));
+                input.value = '';
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Failed to send message');
+            });
+        }
+        
+        function addMessageToHistory(original, reversed, timestamp) {
+            const messagesDiv = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            
+            messageDiv.innerHTML = `
+                <div class="original">${original}</div>
+                <div class="reversed">${reversed}</div>
+                <div class="timestamp">${timestamp}</div>
+            `;
+            
+            // 添加到顶部
+            messagesDiv.insertBefore(messageDiv, messagesDiv.firstChild);
+        }
+        
+        // 按Enter发送消息
+        document.getElementById('message-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+    </script>
+</body>
+</html>
