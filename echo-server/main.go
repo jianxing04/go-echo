@@ -107,6 +107,7 @@ func main() {
 	router.POST("/login", loginHandler)
 	router.GET("/logout", logoutHandler)
 	router.POST("/echo", echoHandler)
+	router.DELETE("/message/:id", deleteMessageHandler)
 
 	// 4. Use the server address from the loaded config
 	fmt.Printf("Starting server on %s...\n", cfg.Server.Address)
@@ -331,20 +332,72 @@ func echoHandler(c *gin.Context) {
 		return
 	}
 
-	// 反转消息
 	reversed := reverseString(message)
 
-	// 保存消息到数据库
-	_, err := db.Exec("INSERT INTO messages (user_id, original_message, reversed_message) VALUES (?, ?, ?)",
+	// MODIFIED: Capture the result of the database execution
+	result, err := db.Exec("INSERT INTO messages (user_id, original_message, reversed_message) VALUES (?, ?, ?)",
 		userID, message, reversed)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save message"})
 		return
 	}
 
+	// NEW: Get the ID of the row we just inserted
+	newMessageID, err := result.LastInsertId()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to retrieve message ID"})
+		return
+	}
+
+	// MODIFIED: Add the new message ID to the JSON response
 	c.JSON(http.StatusOK, gin.H{
+		"id":        newMessageID, // The new message ID
 		"original":  message,
 		"reversed":  reversed,
 		"timestamp": time.Now().Format("2006-01-02 15:04:05"),
 	})
+}
+
+// NEW: deleteMessageHandler handles deleting a specific message
+func deleteMessageHandler(c *gin.Context) {
+	session := sessions.Default(c)
+	userID := session.Get("user_id")
+
+	// 1. Ensure the user is logged in
+	if userID == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	// 2. Get the message ID from the URL parameter
+	messageID := c.Param("id")
+	if messageID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Message ID is required"})
+		return
+	}
+
+	// 3. Execute the delete query
+	// IMPORTANT: We include "user_id = ?" in the WHERE clause.
+	// This is a critical security check to ensure users can only delete their own messages.
+	result, err := db.Exec("DELETE FROM messages WHERE id = ? AND user_id = ?", messageID, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete message"})
+		return
+	}
+
+	// 4. Check if a row was actually deleted
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify deletion"})
+		return
+	}
+
+	if rowsAffected == 0 {
+		// This means the message didn't exist or didn't belong to the user
+		c.JSON(http.StatusNotFound, gin.H{"error": "Message not found or you do not have permission to delete it"})
+		return
+	}
+
+	// 5. Send a success response
+	c.JSON(http.StatusOK, gin.H{"success": true})
 }

@@ -126,6 +126,7 @@ button:hover {
 }
 
 .message {
+    position: relative;
     padding: 15px;
     margin-bottom: 15px;
     border-radius: 8px;
@@ -162,4 +163,30 @@ a {
 
 a:hover {
     text-decoration: underline;
+}
+
+
+/* --- Styles for Delete Button --- */
+
+.delete-btn {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    background-color: transparent;
+    color: #95a5a6;
+    border: none;
+    border-radius: 50%;
+    width: 24px;
+    height: 24px;
+    font-size: 16px;
+    line-height: 24px;
+    text-align: center;
+    cursor: pointer;
+    transition: color 0.2s ease, transform 0.2s ease;
+}
+
+.delete-btn:hover {
+    background-color: transparent; /* This line is now added */
+    color: #e74c3c;
+    transform: scale(1.2);
 }
