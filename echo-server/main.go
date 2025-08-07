@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -13,16 +14,27 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/yaml.v3" // 1. Import the YAML package
 )
 
-// 数据库配置
-const (
-	dbUser     = "root"
-	dbPassword = "wjxmhcjlyAzg04"
-	dbName     = "echo_db"
-)
+// Config struct to hold all your configuration
+type Config struct {
+	Database struct {
+		User     string `yaml:"user"`
+		Password string `yaml:"password"`
+		Name     string `yaml:"name"`
+		Host     string `yaml:"host"`
+		Port     int    `yaml:"port"`
+	} `yaml:"database"`
+	Server struct {
+		Address string `yaml:"address"`
+	} `yaml:"server"`
+	Session struct {
+		Secret string `yaml:"secret"`
+	} `yaml:"session"`
+}
 
-// 用户模型
+// User and Message models remain the same
 type User struct {
 	ID        int
 	Username  string
@@ -30,7 +42,6 @@ type User struct {
 	CreatedAt time.Time
 }
 
-// 消息模型
 type Message struct {
 	ID              int
 	UserID          int
@@ -39,7 +50,6 @@ type Message struct {
 	CreatedAt       time.Time
 }
 
-// 页面数据
 type PageData struct {
 	Title    string
 	User     *User
@@ -49,26 +59,47 @@ type PageData struct {
 }
 
 var db *sql.DB
+var cfg *Config // Global variable to hold the loaded config
+
+// loadConfig reads configuration from file.
+func loadConfig(path string) (*Config, error) {
+	f, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var config Config
+	err = yaml.Unmarshal(f, &config)
+	if err != nil {
+		return nil, err
+	}
+	return &config, nil
+}
 
 func main() {
-	// 初始化数据库连接
+	// 2. Load configuration from the YAML file at startup
+	var err error
+	cfg, err = loadConfig("config.yaml")
+	if err != nil {
+		log.Fatalf("Error loading configuration: %v", err)
+	}
+
+	// Initialize database connection
 	initDB()
 	defer db.Close()
 
-	// 创建Gin路由
+	// Create Gin router
 	router := gin.Default()
 
-	// 设置会话存储
-	store := cookie.NewStore([]byte("secret"))
+	// 3. Use the session secret from the loaded config
+	store := cookie.NewStore([]byte(cfg.Session.Secret))
 	router.Use(sessions.Sessions("echo_session", store))
 
-	// 加载模板
+	// Load templates and static files (no changes here)
 	router.LoadHTMLGlob("templates/*")
-
-	// 静态文件服务
 	router.Static("/static", "./static")
 
-	// 路由配置
+	// Route configuration (no changes here)
 	router.GET("/", homeHandler)
 	router.GET("/register", registerFormHandler)
 	router.POST("/register", registerHandler)
@@ -77,14 +108,22 @@ func main() {
 	router.GET("/logout", logoutHandler)
 	router.POST("/echo", echoHandler)
 
-	// 在WSL2中运行
-	fmt.Println("Starting server on :8080...")
-	router.Run(":8080")
+	// 4. Use the server address from the loaded config
+	fmt.Printf("Starting server on %s...\n", cfg.Server.Address)
+	router.Run(cfg.Server.Address)
 }
 
 func initDB() {
+	// 5. Build the DSN from the loaded config
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?parseTime=true",
+		cfg.Database.User,
+		cfg.Database.Password,
+		cfg.Database.Host,
+		cfg.Database.Port,
+		cfg.Database.Name,
+	)
+
 	var err error
-	dsn := fmt.Sprintf("%s:%s@tcp(127.0.0.1:3306)/%s?parseTime=true", dbUser, dbPassword, dbName)
 	db, err = sql.Open("mysql", dsn)
 	if err != nil {
 		log.Fatalf("Error connecting to database: %v", err)

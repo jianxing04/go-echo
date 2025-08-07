@@ -1,0 +1,12 @@
+database:
+  user: "root"
+  password: "Wjx@Mhcjly04!"
+  name: "TestDB"
+  host: "127.0.0.1"
+  port: 3306
+
+server:
+  address: ":8080"
+
+session:
+  secret: "a-much-more-secure-secret-key"
